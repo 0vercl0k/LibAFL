@@ -1,5 +1,7 @@
 use std::{
-    env, fs,
+    env,
+    fs::{self, File},
+    io::Write,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
@@ -9,9 +11,9 @@ use which::which;
 
 use crate::cargo_add_rpath;
 
-pub const QEMU_URL: &str = "https://github.com/AFLplusplus/qemu-libafl-bridge";
+pub const QEMU_URL: &str = "https://github.com/0vercl0k/qemu-libafl-bridge";
 pub const QEMU_DIRNAME: &str = "qemu-libafl-bridge";
-pub const QEMU_REVISION: &str = "4cafaa9a087dae6674b0fdc11ba34d3e6a8364d2";
+pub const QEMU_REVISION: &str = "fd849f709a003e6b89ee014625668489230aacfd";
 
 #[allow(clippy::module_name_repetitions)]
 pub struct BuildResult {
@@ -59,6 +61,45 @@ fn get_config_signature(config_cmd: &Command) -> String {
     signature_string
 }
 
+fn build_cmd(cmd: Command) -> Command {
+    if cfg!(target_os = "windows") {
+        let mut win_cmd = Command::new(r"c:\Users\over\Downloads\msys64\msys2_shell.cmd");
+        win_cmd.env_clear();
+        win_cmd.current_dir(cmd.get_current_dir().unwrap());
+        win_cmd.env("HOME", ".");
+        let mut final_arg = cmd.get_program().to_str().unwrap().to_string();
+
+        for arg in cmd.get_args() {
+            final_arg = format!("{final_arg} {}", arg.to_string_lossy());
+        }
+        win_cmd
+            .arg("-mingw64")
+            .arg("-defterm")
+            .arg("-no-start")
+            .arg("-c")
+            .arg(final_arg);
+
+        for (k, v) in cmd.get_envs() {
+            if let Some(v) = v {
+                win_cmd.env(k, v);
+            } else {
+                win_cmd.env_remove(k);
+            }
+        }
+
+        // XXX: strip the __LIBAFL_QEMU_BUILD_CC / __LIBAFL_QEMU_BUILD_CXX environment variables
+        // as they'll hold 'cl.exe' / 'link.exe' when we want to build with `mingw`'s `cc` / `c++`.
+        win_cmd.env_remove("__LIBAFL_QEMU_BUILD_CC");
+        win_cmd.env_remove("__LIBAFL_QEMU_BUILD_CXX");
+
+        win_cmd.current_dir(cmd.get_current_dir().unwrap());
+
+        win_cmd
+    } else {
+        cmd
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn configure_qemu(
     cc_compiler: &cc::Tool,
@@ -71,8 +112,9 @@ fn configure_qemu(
 ) -> Command {
     let mut cmd = Command::new("./configure");
 
-    let linker_interceptor = qemu_path.join("linker_interceptor.py");
-    let linker_interceptor_plus_plus = qemu_path.join("linker_interceptor++.py");
+    let ext = if cfg!(target_os = "windows") { "bat" } else { "py" };
+    let linker_interceptor = PathBuf::from(format!("linker_interceptor.{ext}"));
+    let linker_interceptor_plus_plus = PathBuf::from(format!("linker_interceptor++.{ext}"));
 
     println!("cargo:rerun-if-changed={}", linker_interceptor.display());
     println!(
@@ -86,8 +128,8 @@ fn configure_qemu(
         .env("__LIBAFL_QEMU_BUILD_OUT", build_dir.join("linkinfo.json"))
         .env("__LIBAFL_QEMU_BUILD_CC", cc_compiler.path())
         .env("__LIBAFL_QEMU_BUILD_CXX", cpp_compiler.path())
-        .arg(format!("--cc={}", linker_interceptor.display()))
-        .arg(format!("--cxx={}", linker_interceptor_plus_plus.display()))
+        .arg(format!("--cc={linker_interceptor}"))
+        .arg(format!("--cxx={linker_interceptor_plus_plus}",))
         .arg("--as-shared-lib")
         .arg(format!("--target-list={cpu_target}-{target_suffix}"))
         // .arg("--disable-capstone")
@@ -218,6 +260,11 @@ fn configure_qemu(
         .arg("--disable-tests");
     }
 
+    let cmd = build_cmd(cmd);
+
+    eprintln!("configure: {cmd:?}");
+    eprintln!("configure cur dir: {:?}", cmd.get_current_dir());
+
     cmd
 }
 
@@ -239,6 +286,11 @@ fn build_qemu(
     if let Some(j) = jobs {
         cmd.arg(format!("{j}")).env("V", "1");
     }
+
+    let cmd = build_cmd(cmd);
+
+    eprintln!("build: {cmd:?}");
+    eprintln!("build cur dir: {:?}", cmd.get_current_dir());
 
     cmd
 }
@@ -290,7 +342,7 @@ pub fn build(
     target_dir.pop();
     target_dir.pop();
 
-    build_dep_check(&["git", "make"]);
+    // build_dep_check(&["git", "make"]);
 
     let cc_compiler = cc::Build::new().cpp(false).get_compiler();
     let cpp_compiler = cc::Build::new().cpp(true).get_compiler();
@@ -360,19 +412,30 @@ pub fn build(
     let config_signature_path = libafl_qemu_build_dir.join("libafl_config");
 
     let target_suffix = if is_usermode {
+        if cfg!(target_os = "windows") {
+            panic!("linux-user is not supported on Windows");
+        }
         "linux-user".to_string()
     } else {
         "softmmu".to_string()
     };
 
+    let suffix = if cfg!(target_os = "linux") {
+        "so"
+    } else if cfg!(target_os = "windows") {
+        "dll"
+    } else {
+        panic!("Unsupported OS");
+    };
+
     let (output_lib, output_lib_link) = if is_usermode {
         (
-            libafl_qemu_build_dir.join(format!("libqemu-{cpu_target}.so")),
+            libafl_qemu_build_dir.join(format!("libqemu-{cpu_target}.{suffix}")),
             format!("qemu-{cpu_target}"),
         )
     } else {
         (
-            libafl_qemu_build_dir.join(format!("libqemu-system-{cpu_target}.so")),
+            libafl_qemu_build_dir.join(format!("libqemu-system-{cpu_target}.{suffix}")),
             format!("qemu-system-{cpu_target}"),
         )
     };
@@ -480,23 +543,32 @@ pub fn build(
         println!("cargo:rustc-link-lib=dylib={output_lib_link}");
         cargo_add_rpath(qemu_build_dir_str);
     } else {
-        let mut cmd = vec![];
+        let resp_filepath = libafl_qemu_build_dir.join("libqemu-partially-linked.rsp");
+        let mut resp_file =
+            File::create(&resp_filepath).expect("Failed to create libqemu-partially-linked.rsp");
         for arg in linkinfo["cmd"].members() {
-            cmd.push(
-                arg.as_str()
-                    .expect("linkinfo.json `cmd` values must be strings"),
-            );
+            let arg_str = arg
+                .as_str()
+                .expect("linkinfo.json `cmd` values must be strings");
+            writeln!(resp_file, "{}", arg_str)
+                .expect("Failed to write to libqemu-partially-linked.rsp");
         }
 
+        drop(resp_file);
+
+        #[cfg(target_os = "linux")]
         let mut link_command = cpp_compiler.to_command();
+        #[cfg(target_os = "windows")]
+        let mut link_command = Command::new("c++");
 
         link_command
             .current_dir(&libafl_qemu_build_dir)
             .arg("-o")
             .arg("libqemu-partially-linked.o")
             .arg("-r")
-            .args(cmd);
+            .arg("@libqemu-partially-linked.rsp");
 
+        let mut link_command = build_cmd(link_command);
         let link_str = format!("{link_command:?}");
 
         let output = match link_command.output() {
@@ -598,13 +670,13 @@ pub fn build(
                 .expect("Partial linked failure");
         }*/
 
-        Command::new("ar")
-            .current_dir(out_dir_path)
+        let libqemu_partially_linked = libafl_qemu_build_dir.join("libqemu-partially-linked.o").to_string_lossy().replace('\\', "/");
+        let mut ar = Command::new("ar");
+        ar.current_dir(out_dir_path)
             .arg("crs")
             .arg("libqemu-partially-linked.a")
-            .arg(libafl_qemu_build_dir.join("libqemu-partially-linked.o"))
-            .status()
-            .expect("Ar creation");
+            .arg(libqemu_partially_linked);
+        build_cmd(ar).status().expect("Ar creation");
 
         println!("cargo:rustc-link-search=native={out_dir}");
         println!("cargo:rustc-link-lib=static=qemu-partially-linked");

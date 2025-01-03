@@ -19,6 +19,8 @@ use num_enum::{IntoPrimitive, TryFromPrimitive};
 use paste::paste;
 use strum_macros::EnumIter;
 
+mod libc;
+
 #[cfg(all(not(feature = "clippy"), target_os = "linux"))]
 mod bindings {
     #![allow(non_upper_case_globals)]

@@ -1,8 +1,8 @@
 mod host_specific {
-    #[cfg(target_os = "linux")]
-    include!("build_linux.rs");
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    include!("build_linux.rs");   
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     pub fn build() {
         // Print a emulation_mode to silence clippy's unexpected cfg on macOS
         println!("cargo:rustc-cfg=emulation_mode=\"usermode\"");

@@ -1,12 +1,17 @@
 #![forbid(unexpected_cfgs)]
 
 mod host_specific {
-    #[cfg(target_os = "linux")]
+    // XXX:
+    // cargo c --target=x86_64-pc-windows-gnu
+    // https://wiki.qemu.org/Hosts/W32#Native_builds_with_MSYS2
+    // pacman -S mingw-w64-x86_64-ninja git
+    // enable long paths
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     include!("build_linux.rs");
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     pub fn build() {
-        println!("cargo:warning=libafl_qemu_sys only builds on Linux hosts ATM");
+        println!("cargo:warning=libafl_qemu_sys only builds on Linux & Windows hosts ATM");
     }
 }
 

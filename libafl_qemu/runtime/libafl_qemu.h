@@ -24,9 +24,8 @@
   #include <stdint.h>
   #include <intsafe.h>
 
-typedef UINT64 libafl_word;
+  typedef uint64_t libafl_word;
   #define LIBAFL_CALLING_CONVENTION __fastcall
-
 #else
   #include <stdint.h>
 
@@ -65,19 +64,18 @@ typedef enum LibaflQemuEndStatus {
 } LibaflExitEndParams;
 
 #ifdef _WIN32
+    #ifdef __cplusplus
+    #define LIBAFL_EXTERN_C extern "C"
+    #else
+    #define LIBAFL_EXTERN_C
+    #endif
+
     #define LIBAFL_DEFINE_FUNCTIONS(name, _opcode) \
-      #ifdef __cplusplus \
-        extern "C" { \
-      #endif \
-          libafl_word LIBAFL_CALLING_CONVENTION _libafl_##name##_call0(libafl_word action); \
-          libafl_word LIBAFL_CALLING_CONVENTION _libafl_##name##_call1(libafl_word action, \
-                                                        ##name##  libafl_word arg1); \
-          libafl_word LIBAFL_CALLING_CONVENTION _libafl_##name##_call2(libafl_word action, \
+          LIBAFL_EXTERN_C libafl_word LIBAFL_CALLING_CONVENTION _libafl_##name##_call0(libafl_word action); \
+          LIBAFL_EXTERN_C libafl_word LIBAFL_CALLING_CONVENTION _libafl_##name##_call1(libafl_word action, libafl_word arg1); \
+          LIBAFL_EXTERN_C libafl_word LIBAFL_CALLING_CONVENTION _libafl_##name##_call2(libafl_word action, \
                                                                    libafl_word arg1, \
-                                                                   libafl_word arg2); \
-      #ifdef __cplusplus \
-        } \
-      #endif
+                                                                   libafl_word arg2);
 #else
 
   #if defined(__x86_64__)
@@ -214,12 +212,12 @@ typedef enum LibaflQemuEndStatus {
         "mov x2, %3\n"                                                                      \
         ".word " XSTRINGIFY(opcode) "\n"                                        \
         "mov %0, x0\n"                                                                      \
-        : "=r"(ret)                                                                         \
+        : "=r"(ret)\
         : "r"(action), "r"(arg1), "r"(arg2)                                                 \
         : "x0", "x1", "x2"                                                                  \
     );   \
         return ret;                                                                                 \
-      }
+      }                                                                         
   #else
     #warning "LibAFL QEMU Runtime does not support your architecture yet, please leave an issue."
   #endif

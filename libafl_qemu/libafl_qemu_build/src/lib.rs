@@ -76,13 +76,44 @@ pub fn build_with_bindings(
 ) {
     let build_result = build::build(cpu_target, is_big_endian, is_usermode, jobs);
 
-    let clang_args = qemu_bindgen_clang_args(
+    let mut clang_args = qemu_bindgen_clang_args(
         &build_result.qemu_path,
         &build_result.build_dir,
         cpu_target,
         is_usermode,
     );
 
+    clang_args.push("--target=x86_64-w64-mingw32".to_string());
+
+    // XXX: https://github.com/rust-lang/rust-bindgen/issues/642
+    // ```
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\ia32intrin.h:41:10: error: use of unknown builtin '__builtin_ia32_bsrsi' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\ia32intrin.h:112:1: error: definition of builtin function '__rdtsc'
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\ia32intrin.h:134:10: error: use of unknown builtin '__builtin_ia32_rolqi' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\ia32intrin.h:142:10: error: use of unknown builtin '__builtin_ia32_rolhi' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\ia32intrin.h:159:10: error: use of unknown builtin '__builtin_ia32_rorqi' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\ia32intrin.h:167:10: error: use of unknown builtin '__builtin_ia32_rorhi' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\ia32intrin.h:201:10: error: use of unknown builtin '__builtin_ia32_bsrdi' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\adxintrin.h:36:10: error: use of unknown builtin '__builtin_ia32_sbb_u32' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\adxintrin.h:61:10: error: use of unknown builtin '__builtin_ia32_sbb_u64' [-Wimplicit-function-declaration]
+    // /mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include\cetintrin.h:42:33: error: too few arguments to function call, expected 1, have 0
+    // ```
+    clang_args.push("-D_X86INTRIN_H_INCLUDED".to_string());
+    clang_args.push("-D_IMMINTRIN_H_INCLUDED".to_string());
+    clang_args.push("-D_EMMINTRIN_H_INCLUDED".to_string());
+
+    // XXX:
+    // ```
+    // # echo | gcc -xc -E -v -
+    // C:/Users/over/Downloads/msys64/mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include
+    // C:/Users/over/Downloads/msys64/mingw64/include
+    // C:/Users/over/Downloads/msys64/mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include-fixed
+    // ```
+    clang_args.push("-IC:/Users/over/Downloads/msys64/mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include".to_string());
+    clang_args.push("-IC:/Users/over/Downloads/msys64/mingw64/include".to_string());
+    // clang_args.push("-IC:/Users/over/Downloads/msys64/mingw64/lib/gcc/x86_64-w64-mingw32/13.2.0/include-fixed".to_string());
+
+    dbg!(&clang_args);
     let bind = bindings::generate(&build_result.build_dir, cpu_target, clang_args)
         .expect("Failed to generate the bindings");
 
