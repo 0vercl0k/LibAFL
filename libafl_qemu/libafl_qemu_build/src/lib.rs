@@ -102,6 +102,9 @@ pub fn build_with_bindings(
     clang_args.push("-D_IMMINTRIN_H_INCLUDED".to_string());
     clang_args.push("-D_EMMINTRIN_H_INCLUDED".to_string());
 
+    // XXX: Check out qemu-libafl-bridge/host/include/x86_64/host/atomic128-ldst.h
+    clang_args.push("-DLIBAFL_QEMU_BINDGEN".to_string());
+
     // XXX:
     // ```
     // # echo | gcc -xc -E -v -
@@ -200,6 +203,8 @@ fn qemu_bindgen_clang_args(
     cpu_target: &str,
     is_usermode: bool,
 ) -> Vec<String> {
+    // XXX: This doesn't work on Windows, `llvm-config` isn't even part of the LLVM installer
+    #[cfg(not(windows))]
     if env::var("LLVM_CONFIG_PATH").is_err() {
         let found = find_llvm_config().expect("Cannot find a suitable llvm-config, it must be a version equal or greater than the rustc LLVM version. Try specifying LLVM_CONFIG_PATH.");
         env::set_var("LLVM_CONFIG_PATH", found);

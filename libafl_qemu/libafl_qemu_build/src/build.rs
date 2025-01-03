@@ -13,7 +13,7 @@ use crate::cargo_add_rpath;
 
 pub const QEMU_URL: &str = "https://github.com/0vercl0k/qemu-libafl-bridge";
 pub const QEMU_DIRNAME: &str = "qemu-libafl-bridge";
-pub const QEMU_REVISION: &str = "fd849f709a003e6b89ee014625668489230aacfd";
+pub const QEMU_REVISION: &str = "4a6a991fb3824d03fe900258d46bdcd303f22f46";
 
 #[allow(clippy::module_name_repetitions)]
 pub struct BuildResult {
@@ -128,8 +128,8 @@ fn configure_qemu(
         .env("__LIBAFL_QEMU_BUILD_OUT", build_dir.join("linkinfo.json"))
         .env("__LIBAFL_QEMU_BUILD_CC", cc_compiler.path())
         .env("__LIBAFL_QEMU_BUILD_CXX", cpp_compiler.path())
-        .arg(format!("--cc={}", linker_interceptor.file_name().unwrap().to_string_lossy()))
-        .arg(format!("--cxx={}", linker_interceptor_plus_plus.file_name().unwrap().to_string_lossy()))
+        .arg(format!("--cc={}", linker_interceptor.display().to_string().replace("\\", "/")))
+        .arg(format!("--cxx={}", linker_interceptor_plus_plus.display().to_string().replace("\\", "/")))
         .arg("--as-shared-lib")
         .arg(format!("--target-list={cpu_target}-{target_suffix}"))
         // .arg("--disable-capstone")
@@ -179,14 +179,14 @@ fn configure_qemu(
         .arg("--disable-gio")
         .arg("--disable-glusterfs")
         .arg("--disable-gnutls")
-        .arg("--disable-gtk")
-        .arg("--disable-guest-agent")
-        .arg("--disable-guest-agent-msi")
+        // .arg("--disable-gtk")
+        // .arg("--disable-guest-agent")
+        // .arg("--disable-guest-agent-msi")
         .arg("--disable-hvf")
         .arg("--disable-iconv")
         .arg("--disable-jack")
         .arg("--disable-keyring")
-        .arg("--disable-kvm")
+        // .arg("--disable-kvm")
         .arg("--disable-libdaxctl")
         .arg("--disable-libiscsi")
         .arg("--disable-libnfs")
@@ -197,7 +197,7 @@ fn configure_qemu(
         .arg("--disable-linux-aio")
         .arg("--disable-linux-io-uring")
         .arg("--disable-linux-user")
-        .arg("--disable-live-block-migration")
+        // .arg("--disable-live-block-migration")
         .arg("--disable-lzfse")
         .arg("--disable-lzo")
         .arg("--disable-l2tpv3")
@@ -213,7 +213,7 @@ fn configure_qemu(
         .arg("--disable-pa")
         .arg("--disable-parallels")
         .arg("--disable-png")
-        .arg("--disable-pvrdma")
+        // .arg("--disable-pvrdma")
         .arg("--disable-qcow1")
         .arg("--disable-qed")
         .arg("--disable-qga-vss")
@@ -256,8 +256,7 @@ fn configure_qemu(
         .arg("--disable-xen")
         .arg("--disable-xen-pci-passthrough")
         .arg("--disable-xkbcommon")
-        .arg("--disable-zstd")
-        .arg("--disable-tests");
+        .arg("--disable-zstd");
     }
 
     let cmd = build_cmd(cmd);
@@ -554,6 +553,7 @@ pub fn build(
                 .expect("Failed to write to libqemu-partially-linked.rsp");
         }
 
+        println!("cargo:rerun-if-changed={}", resp_filepath.display());
         drop(resp_file);
 
         #[cfg(target_os = "linux")]

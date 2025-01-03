@@ -58,8 +58,11 @@ const WRAPPER_HEADER: &str = r#"
 #include "hw/core/sysemu-cpu-ops.h"
 #include "exec/address-spaces.h"
 #include "sysemu/tcg.h"
+#include "sysemu/runstate.h"
 #include "sysemu/replay.h"
 
+#include "libafl/system.h"
+#include "libafl/qemu_snapshot.h"
 #include "libafl/syx-snapshot/device-save.h"
 #include "libafl/syx-snapshot/syx-snapshot.h"
 
@@ -77,14 +80,29 @@ const WRAPPER_HEADER: &str = r#"
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
 #include "tcg/tcg-internal.h"
-#include "exec/helper-head.h"
 
 #include "qemu/plugin-memory.h"
 
+#include "libafl/cpu.h"
+#include "libafl/gdb.h"
 #include "libafl/exit.h"
-#include "libafl/hook.h"
 #include "libafl/jit.h"
 #include "libafl/utils.h"
+
+#include "libafl/hook.h"
+
+#include "libafl/hooks/tcg/backdoor.h"
+#include "libafl/hooks/tcg/block.h"
+#include "libafl/hooks/tcg/cmp.h"
+#include "libafl/hooks/tcg/edge.h"
+#include "libafl/hooks/tcg/instruction.h"
+#include "libafl/hooks/tcg/read_write.h"
+#include "libafl/hooks/cpu_run.h"
+#include "libafl/hooks/thread.h"
+
+#ifdef CONFIG_USER_ONLY
+#include "libafl/hooks/syscall.h"
+#endif
 
 "#;
 
