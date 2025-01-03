@@ -113,8 +113,8 @@ fn configure_qemu(
     let mut cmd = Command::new("./configure");
 
     let ext = if cfg!(target_os = "windows") { "bat" } else { "py" };
-    let linker_interceptor = PathBuf::from(format!("linker_interceptor.{ext}"));
-    let linker_interceptor_plus_plus = PathBuf::from(format!("linker_interceptor++.{ext}"));
+    let linker_interceptor = qemu_path.join(format!("linker_interceptor.{ext}"));
+    let linker_interceptor_plus_plus = qemu_path.join(format!("linker_interceptor++.{ext}"));
 
     println!("cargo:rerun-if-changed={}", linker_interceptor.display());
     println!(
@@ -128,8 +128,8 @@ fn configure_qemu(
         .env("__LIBAFL_QEMU_BUILD_OUT", build_dir.join("linkinfo.json"))
         .env("__LIBAFL_QEMU_BUILD_CC", cc_compiler.path())
         .env("__LIBAFL_QEMU_BUILD_CXX", cpp_compiler.path())
-        .arg(format!("--cc={linker_interceptor}"))
-        .arg(format!("--cxx={linker_interceptor_plus_plus}",))
+        .arg(format!("--cc={}", linker_interceptor.file_name().unwrap().to_string_lossy()))
+        .arg(format!("--cxx={}", linker_interceptor_plus_plus.file_name().unwrap().to_string_lossy()))
         .arg("--as-shared-lib")
         .arg(format!("--target-list={cpu_target}-{target_suffix}"))
         // .arg("--disable-capstone")
